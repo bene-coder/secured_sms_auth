@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Verify code — SecureAuth{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-md">
+  <div class="mb-8">
+    <div class="mono text-xs text-amber uppercase tracking-widest mb-2">Layer 3 — One-time code</div>
+    <h1 class="text-2xl font-semibold text-surface">Enter your code</h1>
+    <p class="text-sm text-slate mt-1">
+      Sent via SMS to the number ending in <span class="mono text-surface">•••{{ phone }}</span>.
+    </p>
+  </div>
+
+  <form method="POST" action="{{ url_for('verify_otp') }}" class="space-y-4">
+    <div>
+      <label for="otp" class="mono text-xs text-slate uppercase tracking-wider">6-digit code</label>
+      <input type="text" id="otp" name="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-3 text-surface mono text-2xl tracking-[0.3em] text-center
+               focus:border-signal focus:bg-white/10 transition-colors"
+        placeholder="000000">
+    </div>
+
+    <button type="submit"
+      class="w-full mt-2 bg-signal text-ink font-medium rounded px-4 py-2.5 hover:bg-signal/90 transition-colors mono text-sm uppercase tracking-wide">
+      Verify
+    </button>
+  </form>
+
+  <div class="mt-6 text-center">
+    <p class="mono text-xs text-slate">
+      Expires in <span id="countdown" class="text-amber">{{ remaining }}</span>s
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let remainings = parseInt("{{ remaining }}", 10);
+  const el = document.getElementById('countdown');
+  const timer = setInterval(() => {
+    remainings -= 1;
+    if (remainings <= 0) {
+      clearInterval(timer);
+      el.textContent = '0';
+      el.classList.remove('text-amber');
+      el.classList.add('text-alert');
+      el.insertAdjacentHTML('afterend', ' — expired, request a new code');
+    } else {
+      el.textContent = remainings;
+    }
+  }, 1000);
+</script>
+{% endblock %}

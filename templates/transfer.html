@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Send transfer — SecureAuth{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-md">
+  <div class="mb-8">
+    <div class="mono text-xs text-amber uppercase tracking-widest mb-2">Layer 4 — Transaction risk check</div>
+    <h1 class="text-2xl font-semibold text-surface">Send a transfer</h1>
+    <p class="text-sm text-slate mt-1">
+      Simulated only — no real balance or recipient account exists. This screen exists to
+      demonstrate the risk model reacting to real transaction values rather than placeholder constants.
+    </p>
+  </div>
+
+  <form method="POST" action="{{ url_for('transfer') }}" class="space-y-4">
+    <div>
+      <label for="amount" class="mono text-xs text-slate uppercase tracking-wider">Amount (₦)</label>
+      <input type="number" id="amount" name="amount" step="0.01" min="0" required autofocus
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface mono
+               focus:border-signal focus:bg-white/10 transition-colors"
+        placeholder="50000.00">
+    </div>
+
+    <div>
+      <label for="recipient_label" class="mono text-xs text-slate uppercase tracking-wider">Recipient</label>
+      <input type="text" id="recipient_label" name="recipient_label" required
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface
+               focus:border-signal focus:bg-white/10 transition-colors"
+        placeholder="e.g. John's account">
+      <p class="text-[11px] text-slate/70 mt-1">Free text only — not a real linked account.</p>
+    </div>
+
+    <button type="submit"
+      class="w-full mt-2 bg-amber text-ink font-medium rounded px-4 py-2.5 hover:bg-amber/90 transition-colors mono text-sm uppercase tracking-wide">
+      Submit transfer
+    </button>
+  </form>
+
+  <p class="text-sm text-slate mt-6 text-center">
+    <a href="{{ url_for('dashboard') }}" class="text-signal hover:underline">Back to dashboard</a>
+  </p>
+</div>
+{% endblock %}

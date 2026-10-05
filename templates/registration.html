@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Register — SecureAuth{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-md">
+  <div class="mb-8">
+    <div class="mono text-xs text-amber uppercase tracking-widest mb-2">Account setup</div>
+    <h1 class="text-2xl font-semibold text-surface">Create your account</h1>
+    <p class="text-sm text-slate mt-1">This device and SIM are bound to your account now — they won't be asked for again, only verified.</p>
+  </div>
+
+  <form id="register-form" method="POST" action="{{ url_for('register') }}" class="space-y-4">
+    <div>
+      <label for="username" class="mono text-xs text-slate uppercase tracking-wider">Username</label>
+      <input type="text" id="username" name="username" required autofocus
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface focus:border-signal focus:bg-white/10 transition-colors">
+    </div>
+
+    <div>
+      <label for="email" class="mono text-xs text-slate uppercase tracking-wider">Email</label>
+      <input type="email" id="email" name="email" required
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface focus:border-signal focus:bg-white/10 transition-colors">
+    </div>
+
+    <div>
+      <label for="password" class="mono text-xs text-slate uppercase tracking-wider">Password</label>
+      <input type="password" id="password" name="password" required minlength="8"
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface focus:border-signal focus:bg-white/10 transition-colors">
+    </div>
+
+    <div>
+      <label for="phone_number" class="mono text-xs text-slate uppercase tracking-wider">Phone number</label>
+      <input type="tel" id="phone_number" name="phone_number" required placeholder="+234..."
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface focus:border-signal focus:bg-white/10 transition-colors">
+      <p class="text-[11px] text-slate/70 mt-1">Your one-time codes are sent here. This number is bound to your account permanently.</p>
+    </div>
+
+    <div>
+      <label for="sim_id" class="mono text-xs text-slate uppercase tracking-wider">SIM identifier</label>
+      <input type="text" id="sim_id" name="sim_id" required
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface focus:border-signal focus:bg-white/10 transition-colors">
+      <p class="text-[11px] text-slate/70 mt-1">
+        Recorded once at registration only. This project simulates carrier-level SIM-swap
+        detection rather than querying live telecom infrastructure.
+      </p>
+    </div>
+
+    <input type="hidden" name="device_fp_hash" id="device_fp_hash">
+    <input type="hidden" name="device_fp_raw" id="device_fp_raw">
+
+    <button type="submit" id="register-submit"
+      class="w-full mt-2 bg-signal text-ink font-medium rounded px-4 py-2.5 hover:bg-signal/90 transition-colors mono text-sm uppercase tracking-wide">
+      Create account
+    </button>
+
+    <p id="fp-status" class="mono text-[11px] text-slate/70 text-center pt-1">Preparing device check…</p>
+  </form>
+
+  <p class="text-sm text-slate mt-6 text-center">
+    Already registered? <a href="{{ url_for('login') }}" class="text-signal hover:underline">Sign in</a>
+  </p>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  let fpReady = null;
+
+  window.addEventListener('DOMContentLoaded', async () => {
+    const statusEl = document.getElementById('fp-status');
+    try {
+      fpReady = await collectDeviceFingerprint();
+      document.getElementById('device_fp_hash').value = fpReady.hash;
+      document.getElementById('device_fp_raw').value = JSON.stringify(fpReady.components);
+      statusEl.textContent = 'This device will become your trusted baseline.';
+      statusEl.classList.add('text-signal/70');
+    } catch (e) {
+      statusEl.textContent = 'Device check unavailable on this browser.';
+    }
+  });
+
+  document.getElementById('register-form').addEventListener('submit', async function (e) {
+    if (!document.getElementById('device_fp_hash').value && !fpReady) {
+      e.preventDefault();
+      const btn = document.getElementById('register-submit');
+      btn.disabled = true;
+      btn.textContent = 'One moment…';
+      try {
+        fpReady = await collectDeviceFingerprint();
+        document.getElementById('device_fp_hash').value = fpReady.hash;
+        document.getElementById('device_fp_raw').value = JSON.stringify(fpReady.components);
+      } catch (err) { /* proceed without it */ }
+      this.submit();
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,285 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(
+        135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%
+    );
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+}
+
+.container {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 40px;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 25px 45px rgba(0, 0, 0, 0.3);
+}
+
+.logo {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.logo h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.logo p {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.85rem;
+    margin-top: 5px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 500;
+}
+
+input {
+    width: 100%;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+input:focus {
+    border-color: #00d2ff;
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 0 0 3px rgba(0, 210, 255, 0.15);
+}
+
+input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+    border: none;
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0, 210, 255, 0.3);
+}
+
+.btn-danger {
+    background: linear-gradient(90deg, #ff416c, #ff4b2b);
+}
+
+.btn-success {
+    background: linear-gradient(90deg, #00b09b, #96c93d);
+}
+
+.alert {
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.alert-danger {
+    background: rgba(255, 65, 108, 0.2);
+    border: 1px solid rgba(255, 65, 108, 0.4);
+    color: #ff8fab;
+}
+
+.alert-warning {
+    background: rgba(255, 193, 7, 0.2);
+    border: 1px solid rgba(255, 193, 7, 0.4);
+    color: #ffc107;
+}
+
+.alert-info {
+    background: rgba(0, 210, 255, 0.2);
+    border: 1px solid rgba(0, 210, 255, 0.4);
+    color: #00d2ff;
+}
+
+.alert-success {
+    background: rgba(0, 176, 155, 0.2);
+    border: 1px solid rgba(0, 176, 155, 0.4);
+    color: #00b09b;
+}
+
+.layer-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 3px;
+}
+
+.badge-pass {
+    background: rgba(0, 176, 155, 0.2);
+    border: 1px solid #00b09b;
+    color: #00b09b;
+}
+
+.badge-fail {
+    background: rgba(255, 65, 108, 0.2);
+    border: 1px solid #ff416c;
+    color: #ff416c;
+}
+
+.security-layers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 15px 0;
+    justify-content: center;
+}
+
+.divider {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.3);
+    margin: 15px 0;
+    font-size: 0.8rem;
+}
+
+a {
+    color: #00d2ff;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-muted {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.85rem;
+}
+
+.risk-score {
+    text-align: center;
+    padding: 15px;
+    border-radius: 12px;
+    margin: 15px 0;
+}
+
+.risk-low {
+    background: rgba(0, 176, 155, 0.15);
+    border: 1px solid #00b09b;
+}
+
+.risk-medium {
+    background: rgba(255, 193, 7, 0.15);
+    border: 1px solid #ffc107;
+}
+
+.risk-high {
+    background: rgba(255, 65, 108, 0.15);
+    border: 1px solid #ff416c;
+}
+
+.risk-score h2 {
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 15px;
+    text-align: center;
+}
+
+.stat-card h3 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #00d2ff;
+}
+
+.stat-card p {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 4px;
+}
+
+.otp-input {
+    text-align: center;
+    font-size: 2rem;
+    letter-spacing: 12px;
+    font-weight: 700;
+}
+
+.countdown {
+    text-align: center;
+    color: #ffc107;
+    font-size: 0.9rem;
+    margin-top: 10px;
+}
+
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 0.8rem;
+}
+
+.log-table th {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 8px;
+    text-align: left;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+}
+
+.log-table td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
+}

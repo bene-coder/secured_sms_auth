@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}SecureAuth{% endblock %}</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          ink:    '#0B1220',
+          surface:'#E8E6DF',
+          signal: '#3DDC97',
+          alert:  '#E8584C',
+          amber:  '#F0B429',
+          slate:  '#6B7785',
+        },
+        fontFamily: {
+          mono: ['"IBM Plex Mono"', 'monospace'],
+          sans: ['Inter', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #0B1220; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .layer-node { transition: all 0.3s ease; }
+  ::selection { background: #3DDC97; color: #0B1220; }
+  :focus-visible { outline: 2px solid #3DDC97; outline-offset: 2px; }
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body class="min-h-screen bg-ink text-surface antialiased">
+
+<div class="min-h-screen flex">
+
+  <!-- ── LAYER PROGRESS RAIL ───────────────────────────────────────── -->
+  <aside class="hidden md:flex flex-col w-64 border-r border-white/10 px-6 py-10 shrink-0">
+    <div class="mono text-xs text-slate uppercase tracking-widest mb-10">SecureAuth // Pipeline</div>
+    <ol class="space-y-8">
+      {% set layers = [
+        ('CREDENTIALS', 'Layer 0'),
+        ('DEVICE',      'Layer 1'),
+        ('SIM BINDING', 'Layer 2'),
+        ('OTP',         'Layer 3'),
+        ('RISK ENGINE', 'Layer 4'),
+      ] %}
+      {% for name, label in layers %}
+        {% set idx = loop.index0 %}
+        {% set state = (layer_states[idx] if layer_states is defined and idx < layer_states|length else 'pending') %}
+        <li class="flex items-start gap-3">
+          <span class="layer-node mt-0.5 w-2.5 h-2.5 rounded-full shrink-0
+            {% if state == 'passed' %}bg-signal
+            {% elif state == 'failed' %}bg-alert
+            {% elif state == 'active' %}bg-amber animate-pulse
+            {% else %}bg-white/15{% endif %}">
+          </span>
+          <div>
+            <div class="mono text-[10px] text-slate uppercase tracking-wider">{{ label }}</div>
+            <div class="text-sm
+              {% if state == 'passed' %}text-signal
+              {% elif state == 'failed' %}text-alert
+              {% elif state == 'active' %}text-amber
+              {% else %}text-slate{% endif %}">{{ name }}</div>
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+    <div class="mt-auto mono text-[10px] text-slate/60 leading-relaxed">
+      Final-year project<br>Secured SMS-Based<br>Authentication Model
+    </div>
+  </aside>
+
+  <!-- ── MAIN CONTENT ──────────────────────────────────────────────── -->
+  <main class="flex-1 flex flex-col">
+    <div class="md:hidden mono text-xs text-slate uppercase tracking-widest px-6 pt-6">SecureAuth</div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="px-6 pt-6 space-y-2 max-w-xl">
+          {% for category, message in messages %}
+            <div class="mono text-xs px-4 py-3 rounded border
+              {% if category == 'danger' %}bg-alert/10 border-alert/30 text-alert
+              {% elif category == 'success' %}bg-signal/10 border-signal/30 text-signal
+              {% elif category == 'warning' %}bg-amber/10 border-amber/30 text-amber
+              {% else %}bg-white/5 border-white/10 text-slate{% endif %}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="flex-1 flex items-center justify-center px-6 py-10">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='js/fingerprint.js') }}"></script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

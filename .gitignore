@@ -1,0 +1,20 @@
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Flask Instance folder (databases, local config)
+instance/
+
+# Test Results & Logs
+posttest_result/
+
+# IDE / Editor files (optional but recommended)
+.vscode/
+.idea/
+.DS_Store

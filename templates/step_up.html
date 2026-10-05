@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <div class="logo">
+        <h1>⚠️ Verification Required</h1>
+        <p>Layer 1 — Step-Up Authentication</p>
+    </div>
+
+    <div class="alert alert-warning">
+        <strong>Notice:</strong> {{ reason }}.<br>
+        Additional verification is required to continue.
+    </div>
+
+    <div class="security-layers">
+        <span class="layer-badge badge-fail">⚠ Unknown Device Detected</span>
+    </div>
+
+    <p class="text-muted" style="margin: 20px 0; text-align:center;">
+        In a live deployment, you would receive an email verification
+        link or be asked to answer a security question to register
+        this new device.
+    </p>
+
+    <a href="/login" class="btn" style="display:block;
+       text-align:center; text-decoration:none;">
+        ← Return to Login
+    </a>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Access denied — SecureAuth{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-md text-center">
+  <div class="w-14 h-14 mx-auto rounded-full bg-alert/10 border border-alert/30 flex items-center justify-center mb-6">
+    <span class="text-alert text-2xl">✕</span>
+  </div>
+
+  <div class="mono text-xs text-alert uppercase tracking-widest mb-2">{{ layer }}</div>
+  <h1 class="text-2xl font-semibold text-surface mb-3">Access denied</h1>
+  <p class="text-sm text-slate mb-2">{{ reason }}</p>
+
+  {% if risk_score is defined %}
+    <p class="mono text-xs text-slate/70 mb-6">Risk score: <span class="text-alert">{{ risk_score }}%</span></p>
+  {% endif %}
+
+  <a href="{{ url_for('login') }}"
+     class="inline-block mt-4 bg-white/5 border border-white/15 text-surface rounded px-5 py-2.5
+            hover:bg-white/10 transition-colors mono text-sm uppercase tracking-wide">
+    Back to sign in
+  </a>
+</div>
+{% endblock %}

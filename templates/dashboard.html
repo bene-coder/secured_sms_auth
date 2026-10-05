@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — SecureAuth{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-2xl">
+  <div class="mb-8 flex items-start justify-between">
+    <div>
+      <div class="mono text-xs text-signal uppercase tracking-widest mb-2">All layers passed</div>
+      <h1 class="text-2xl font-semibold text-surface">Welcome, {{ user.username }}</h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('transfer') }}"
+         class="mono text-xs text-ink bg-amber hover:bg-amber/90 rounded px-3 py-1.5 transition-colors">
+        Send transfer
+      </a>
+      <a href="{{ url_for('logout') }}"
+         class="mono text-xs text-slate hover:text-surface border border-white/15 rounded px-3 py-1.5 transition-colors">
+        Sign out
+      </a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4 mb-8">
+    <div class="bg-white/5 border border-white/10 rounded p-5">
+      <div class="mono text-[11px] text-slate uppercase tracking-wider mb-1">Risk score</div>
+      <div class="text-3xl font-semibold
+        {% if risk_level == 'HIGH' %}text-alert
+        {% elif risk_level == 'MEDIUM' %}text-amber
+        {% else %}text-signal{% endif %}">{{ risk_score }}%</div>
+    </div>
+    <div class="bg-white/5 border border-white/10 rounded p-5">
+      <div class="mono text-[11px] text-slate uppercase tracking-wider mb-1">Risk level</div>
+      <div class="text-3xl font-semibold
+        {% if risk_level == 'HIGH' %}text-alert
+        {% elif risk_level == 'MEDIUM' %}text-amber
+        {% else %}text-signal{% endif %}">{{ risk_level }}</div>
+    </div>
+  </div>
+
+  <div class="bg-white/5 border border-white/10 rounded mb-6">
+    <div class="mono text-[11px] text-slate uppercase tracking-wider px-5 py-3 border-b border-white/10">
+      Recent authentication attempts
+    </div>
+    <div class="divide-y divide-white/10">
+      {% for log in recent_logs %}
+        <div class="px-5 py-3 flex items-center justify-between">
+          <div>
+            <div class="mono text-xs
+              {% if log.decision == 'GRANT' %}text-signal
+              {% elif log.decision == 'DENY' %}text-alert
+              {% else %}text-amber{% endif %}">{{ log.decision }}</div>
+            <div class="text-xs text-slate mt-0.5">
+              {{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}
+              {% if log.layer_failed %} · failed at {{ log.layer_failed }}{% endif %}
+            </div>
+          </div>
+          {% if log.risk_score is not none %}
+            <div class="mono text-xs text-slate">{{ (log.risk_score * 100) | round(1) }}%</div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="px-5 py-6 text-sm text-slate text-center">No prior attempts logged.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="bg-white/5 border border-white/10 rounded">
+    <div class="mono text-[11px] text-slate uppercase tracking-wider px-5 py-3 border-b border-white/10">
+      Recent transfers (simulated)
+    </div>
+    <div class="divide-y divide-white/10">
+      {% for txn in recent_transactions %}
+        <div class="px-5 py-3 flex items-center justify-between">
+          <div>
+            <div class="mono text-xs
+              {% if txn.decision == 'GRANT' %}text-signal
+              {% elif txn.decision == 'DENY' %}text-alert
+              {% else %}text-amber{% endif %}">{{ txn.decision }} · ₦{{ '{:,.2f}'.format(txn.amount) }}</div>
+            <div class="text-xs text-slate mt-0.5">
+              to {{ txn.recipient_label }} · {{ txn.timestamp.strftime('%Y-%m-%d %H:%M') }}
+            </div>
+          </div>
+          {% if txn.risk_score is not none %}
+            <div class="mono text-xs text-slate">{{ (txn.risk_score * 100) | round(1) }}%</div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="px-5 py-6 text-sm text-slate text-center">No transfers yet.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

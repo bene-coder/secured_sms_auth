@@ -1,0 +1,10 @@
+flask
+flask-sqlalchemy
+bcrypt
+pyjwt
+requests
+pyotp
+xgboost
+scikit-learn
+pandas
+numpy

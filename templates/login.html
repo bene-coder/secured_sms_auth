@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Sign in — SecureAuth{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-md">
+  <div class="mb-8">
+    <div class="mono text-xs text-amber uppercase tracking-widest mb-2">Layer 0 → Layer 1</div>
+    <h1 class="text-2xl font-semibold text-surface">Sign in</h1>
+    <p class="text-sm text-slate mt-1">Credentials are checked first, then your device is verified silently.</p>
+  </div>
+
+  <form id="login-form" method="POST" action="{{ url_for('login') }}" class="space-y-4">
+    <div>
+      <label for="username" class="mono text-xs text-slate uppercase tracking-wider">Username</label>
+      <input type="text" id="username" name="username" required autofocus
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface
+               focus:border-signal focus:bg-white/10 transition-colors"
+        placeholder="demo_user">
+    </div>
+
+    <div>
+      <label for="password" class="mono text-xs text-slate uppercase tracking-wider">Password</label>
+      <input type="password" id="password" name="password" required
+        class="mt-1.5 w-full bg-white/5 border border-white/15 rounded px-4 py-2.5 text-surface
+               focus:border-signal focus:bg-white/10 transition-colors"
+        placeholder="••••••••">
+    </div>
+
+    <!-- Hidden fields populated by fingerprint.js before this form submits.
+         Do NOT add a visible sim_id field here — SIM binding is verified
+         server-side only, never from client input. -->
+    <input type="hidden" name="device_fp_hash" id="device_fp_hash">
+    <input type="hidden" name="device_fp_raw" id="device_fp_raw">
+
+    <button type="submit" id="login-submit"
+      class="w-full mt-2 bg-signal text-ink font-medium rounded px-4 py-2.5
+             hover:bg-signal/90 transition-colors mono text-sm uppercase tracking-wide">
+      Continue
+    </button>
+
+    <p id="fp-status" class="mono text-[11px] text-slate/70 text-center pt-1">Preparing device check…</p>
+  </form>
+
+  <p class="text-sm text-slate mt-6 text-center">
+    No account? <a href="{{ url_for('register') }}" class="text-signal hover:underline">Register</a>
+  </p>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Collect the fingerprint as soon as the page loads (not on submit) so
+  // there's no perceptible delay when the user actually clicks Continue.
+  let fpReady = null;
+
+  window.addEventListener('DOMContentLoaded', async () => {
+    const statusEl = document.getElementById('fp-status');
+    try {
+      fpReady = await collectDeviceFingerprint();
+      document.getElementById('device_fp_hash').value = fpReady.hash;
+      document.getElementById('device_fp_raw').value = JSON.stringify(fpReady.components);
+      statusEl.textContent = 'Device check ready.';
+      statusEl.classList.add('text-signal/70');
+    } catch (e) {
+      statusEl.textContent = 'Device check unavailable — you may be asked to verify by OTP.';
+    }
+  });
+
+  // Safety net: if collection is somehow still in flight when the user
+  // submits very fast, wait briefly rather than submitting an empty hash.
+  document.getElementById('login-form').addEventListener('submit', async function (e) {
+    if (!document.getElementById('device_fp_hash').value && !fpReady) {
+      e.preventDefault();
+      const btn = document.getElementById('login-submit');
+      btn.disabled = true;
+      btn.textContent = 'One moment…';
+      try {
+        fpReady = await collectDeviceFingerprint();
+        document.getElementById('device_fp_hash').value = fpReady.hash;
+        document.getElementById('device_fp_raw').value = JSON.stringify(fpReady.components);
+      } catch (err) { /* proceed without it — server treats as unknown device */ }
+      this.submit();
+    }
+  });
+</script>
+{% endblock %}
