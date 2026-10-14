@@ -20,6 +20,9 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     phone_number  = db.Column(db.String(20),  nullable=False)
     totp_secret   = db.Column(db.String(32),  nullable=False)
+    # Highest TOTP time step already accepted for this user. Any code whose
+    # step is <= this value is a replay and is rejected (single-use OTP).
+    last_otp_step = db.Column(db.BigInteger, nullable=True)
 
     # ── Layer 2: SIM Binding ──────────────────────────────────────────────
     # registered_sim_id is set ONCE at registration and is NEVER accepted
@@ -93,6 +96,24 @@ class OTPRequest(db.Model):
 
     def __repr__(self):
         return f'<OTPRequest user_id={self.user_id}>'
+
+
+class EmailChallenge(db.Model):
+    """
+    Step-up challenge for an unrecognised device. The code is delivered over
+    email (a channel independent of SMS), is stored only as a hash, is valid
+    for a short time and can be used once.
+    """
+    __tablename__ = 'email_challenges'
+
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    code_hash  = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    used       = db.Column(db.Boolean, default=False)
+
+    def __repr__(self):
+        return f'<EmailChallenge user_id={self.user_id}>'
 
 
 class TransactionLog(db.Model):

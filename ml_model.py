@@ -33,29 +33,6 @@ def load_model():
 
 
 def calculate_risk_score(features: dict) -> float:
-    """
-    Calculate fraud risk score for an authentication request.
-
-    WEIGHTED VOTING (not the unweighted voting_clf.predict_proba):
-    Diagnostic testing (decompose_ensemble.py) showed Random Forest and
-    XGBoost stay under-confident even on clearly fraud-shaped inputs —
-    a side effect of the softened class_weight/scale_pos_weight used
-    during training to fix the original false-positive problem. Logistic
-    Regression, by contrast, fires correctly and is naturally better
-    calibrated (tree ensembles' raw predict_proba outputs are known to
-    be poorly calibrated without explicit calibration, e.g.
-    CalibratedClassifierCV, which this model doesn't use).
-
-    Rather than retrain RF/XGBoost (risking reintroducing the original
-    precision collapse), we combine the three models' predictions with
-    LR weighted 2x relative to RF and XGBoost. This was verified against
-    real attacker/legitimate scenarios before being applied — see
-    decompose_ensemble.py — and correctly keeps legitimate logins at LOW
-    while moving realistic attacker patterns into HIGH.
-
-    Returns the raw weighted probability (0.0–1.0). classify_risk() then
-    buckets this against the tuned decision_threshold from training.
-    """
     model_data = load_model()
     scaler       = model_data['scaler']
     feature_cols = model_data['feature_columns']
@@ -78,11 +55,6 @@ def calculate_risk_score(features: dict) -> float:
 
 
 def get_decision_threshold() -> float:
-    """
-    Return the optimal decision threshold saved from training.
-    Falls back to 0.5 if the model was saved without one (e.g. the
-    current pkl where decision_threshold=None due to a notebook bug).
-    """
     model_data = load_model()
     threshold = model_data.get('decision_threshold')
     if threshold is None or not isinstance(threshold, float):

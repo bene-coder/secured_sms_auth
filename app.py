@@ -27,7 +27,8 @@ import bcrypt
 from models import db, User, DeviceFingerprint, AuthenticationLog, OTPRequest, TransactionLog
 from auth import (verify_credentials, check_device_fingerprint,
                    check_sim_binding, simulate_sim_swap, add_trusted_device,
-                   send_otp, verify_otp_code, run_anomaly_detection,
+                   send_otp, verify_otp_code, send_email_challenge, verify_email_code,
+                   run_anomaly_detection,
                    run_transaction_risk_check, log_attempt)
 from otp import generate_secret, get_otp_remaining_seconds
 from ml_model import load_model, calculate_risk_score, classify_risk
@@ -36,7 +37,7 @@ from ml_model import load_model, calculate_risk_score, classify_risk
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'dev-only-change-me')
 
-app.config['SQLALCHEMY_DATABASE_URI']    = 'sqlite:///auth_system.db'
+app.config['SQLALCHEMY_DATABASE_URI']    = os.environ.get('AUTH_DB_URI', 'sqlite:///auth_system.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 
@@ -44,10 +45,23 @@ db.init_app(app)
 
 
 # ── DATABASE INITIALISATION ──────────────────────────────────────────────
+def _ensure_last_otp_step_column():
+    """
+    db.create_all() does not add columns to an existing table. This adds
+    users.last_otp_step to databases created before single-use OTP existed.
+    """
+    from sqlalchemy import inspect, text
+    cols = [c['name'] for c in inspect(db.engine).get_columns('users')]
+    if 'last_otp_step' not in cols:
+        db.session.execute(text('ALTER TABLE users ADD COLUMN last_otp_step BIGINT'))
+        db.session.commit()
+
+
 def init_db():
     """Create all tables and seed a demo user if none exist."""
     with app.app_context():
         db.create_all()
+        _ensure_last_otp_step_column()
 
         if User.query.count() == 0:
             demo_password = os.environ.get('DEMO_USER_PASSWORD', 'ChangeMe123!')
@@ -161,26 +175,76 @@ def login():
                                 layer='Layer 2 — SIM Binding')
 
     # ── STEP-UP DECISION ──────────────────────────────────────────────
-    # Unknown device + SIM binding OK -> still require OTP step-up.
-    # Known device + SIM binding OK -> standard OTP as usual.
-    # (Both paths end up at OTP in this design; the difference is the
-    # consistency score passed to the ML layer afterward, and the log.)
+    # Known device + SIM binding OK   -> standard SMS OTP.
+    # Unknown device + SIM binding OK -> step-up: a code is first sent to the
+    #   registered EMAIL (a channel independent of SMS), and only after it is
+    #   verified does the SMS OTP step follow. An attacker who holds only the
+    #   victim's SIM and password therefore cannot proceed from a new device.
     is_step_up = not fp_passed
-    if is_step_up:
-        flash(f'Security Alert: {fp_message}', 'warning')
-        log_attempt(user, 'STEP_UP', reason=fp_message, layer='LAYER_1', device_fp=device_fp)
-    else:
-        log_attempt(user, 'PROCEED', layer='LAYER_1', device_fp=device_fp)
-
-    send_otp(user)
-
     session['pending_user_id']     = user.id
     session['device_fp']           = device_fp
     session['device_consistency']  = consistency
-    session['otp_sent_at']         = datetime.utcnow().isoformat()
     session['is_step_up_required'] = is_step_up
+    session['email_verified']      = False
 
+    if is_step_up:
+        flash(f'Security Alert: {fp_message}', 'warning')
+        log_attempt(user, 'STEP_UP', reason=fp_message, layer='LAYER_1', device_fp=device_fp)
+        send_email_challenge(user)
+        flash('We sent a verification code to your registered email address.', 'info')
+        return redirect(url_for('verify_email'))
+
+    log_attempt(user, 'PROCEED', layer='LAYER_1', device_fp=device_fp)
+    send_otp(user)
+    session['otp_sent_at'] = datetime.utcnow().isoformat()
     flash('OTP sent to your registered phone number.', 'info')
+    return redirect(url_for('verify_otp'))
+
+
+def _mask_email(address: str) -> str:
+    local, _, domain = address.partition('@')
+    return f"{local[:1]}***@{domain}" if domain else '***'
+
+
+@app.route('/verify-email', methods=['GET', 'POST'])
+def verify_email():
+    """Layer 1 step-up: confirm the new device via a code sent by email."""
+    if 'pending_user_id' not in session or not session.get('is_step_up_required'):
+        return redirect(url_for('login'))
+
+    user = db.session.get(User, session['pending_user_id'])
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+
+    if session.get('email_verified'):
+        return redirect(url_for('verify_otp'))
+
+    if request.method == 'GET':
+        return render_template('verify_email.html', username=user.username,
+                                email=_mask_email(user.email))
+
+    submitted = request.form.get('email_code', '').strip()
+    passed, message = verify_email_code(user, submitted)
+
+    if not passed:
+        flash(message, 'danger')
+        log_attempt(user, 'DENY', reason=message, layer='LAYER_1',
+                    device_fp=session.get('device_fp'))
+        if user.is_locked:
+            session.clear()
+            return render_template('denied.html',
+                                    reason='Account locked — too many failed attempts',
+                                    layer='Layer 1 — Step-up verification')
+        return render_template('verify_email.html', username=user.username,
+                                email=_mask_email(user.email))
+
+    session['email_verified'] = True
+    log_attempt(user, 'PROCEED', reason='Email step-up verified', layer='LAYER_1',
+                device_fp=session.get('device_fp'))
+    send_otp(user)
+    session['otp_sent_at'] = datetime.utcnow().isoformat()
+    flash('Email verified. A one-time code was sent to your phone by SMS.', 'info')
     return redirect(url_for('verify_otp'))
 
 
@@ -193,6 +257,10 @@ def verify_otp():
     if not user:
         session.clear()
         return redirect(url_for('login'))
+
+    # An unrecognised device must complete the email step-up first.
+    if session.get('is_step_up_required') and not session.get('email_verified'):
+        return redirect(url_for('verify_email'))
 
     otp_request = (OTPRequest.query
                    .filter_by(user_id=user.id)
@@ -224,12 +292,6 @@ def verify_otp():
                                 username=user.username,
                                 phone=user.phone_number[-4:],
                                 remaining=remaining)
-
-    # OTP succeeded on a step-up (previously-unknown) device — now that
-    # the user has proven possession of the registered phone, promote
-    # this fingerprint to trusted so they aren't step-up'd every time.
-    if session.get('is_step_up_required'):
-        add_trusted_device(user, session.get('device_fp'), label='Verified via step-up OTP')
 
     # ── LAYER 4: ML ANOMALY DETECTION ────────────────────────────────────
     # NOTE: most of these fields are still placeholder constants — see
@@ -265,11 +327,17 @@ def verify_otp():
 
     log_attempt(user, 'GRANT', risk_score=risk_score, risk_level=risk_level, device_fp=device_fp)
 
+    # Promote a new device to trusted ONLY now: email code, SMS OTP and the
+    # ML risk check have all passed. (Previously an SMS OTP alone was enough.)
+    if session.get('is_step_up_required') and session.get('email_verified'):
+        add_trusted_device(user, device_fp, label='Verified via email + SMS step-up')
+
     session.pop('pending_user_id', None)
     session.pop('device_fp', None)
     session.pop('device_consistency', None)
     session.pop('otp_sent_at', None)
     session.pop('is_step_up_required', None)
+    session.pop('email_verified', None)
 
     session['authenticated_user'] = user.id
     session['risk_score']         = round(risk_score * 100, 2)

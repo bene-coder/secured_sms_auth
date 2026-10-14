@@ -16,6 +16,14 @@ in the strict two-factor sense, to avoid overclaiming under questioning.
 import pyotp
 import time
 from datetime import datetime, timezone
+from pyotp.utils import strings_equal
+
+# Hard cap on how long an issued OTP request stays usable. The TOTP step is
+# 30 s and validate/match accept +/-1 step, so a code issued at time t is
+# naturally accepted for 30-60 s; this constant makes the cap explicit and is
+# also what the SMS text and the UI countdown display.
+OTP_VALIDITY_SECONDS = 60
+TOTP_INTERVAL_SECONDS = 30
 
 
 def generate_secret() -> str:
@@ -32,17 +40,31 @@ def generate_otp(secret: str) -> str:
     return totp.now()
 
 
+def match_otp_step(secret: str, user_otp: str, for_time=None):
+    """
+    Return the TOTP time step (an integer) that the submitted code matches,
+    or None if it matches no step in the accepted window (current step +/- 1,
+    i.e. +/-30 s of delay/drift). Returning the step, not just True/False,
+    lets the caller reject a step that was already consumed (single use).
+    """
+    totp = pyotp.TOTP(secret, interval=TOTP_INTERVAL_SECONDS)
+    now = for_time if for_time is not None else datetime.now(timezone.utc)
+    current_step = totp.timecode(now)
+    for offset in (-1, 0, 1):
+        if strings_equal(str(user_otp), totp.at(now, counter_offset=offset)):
+            return current_step + offset
+    return None
+
+
 def validate_otp(secret: str, user_otp: str) -> bool:
     """
-    Validate a submitted code against the current and adjacent time steps.
-    valid_window=1 allows +/- 30 seconds of drift/delay, matching the
-    90-second display countdown used in the UI.
+    Stateless check (code matches the current step +/- 1). It does NOT
+    enforce single use - use auth.verify_otp_code for that.
     """
-    totp = pyotp.TOTP(secret)
-    return totp.verify(user_otp, valid_window=1)
+    return match_otp_step(secret, user_otp) is not None
 
 
-def get_otp_remaining_seconds(requested_at, window_seconds: int = 90) -> int:
+def get_otp_remaining_seconds(requested_at, window_seconds: int = OTP_VALIDITY_SECONDS) -> int:
     """
     Seconds remaining before the OTP request should be considered expired
     for UI countdown purposes. Accepts either a datetime or an ISO string.
@@ -89,5 +111,20 @@ def simulate_sms(phone_number: str, otp_code: str):
     print(f"  SIMULATED SMS SENT")
     print(f"  To:      {phone_number}")
     print(f"  Message: Your SecureAuth OTP is: {otp_code}")
-    print(f"  Valid for 90 seconds.")
+    print(f"  Valid for {OTP_VALIDITY_SECONDS} seconds.")
+    print(f"{'='*50}\n")
+
+
+def simulate_email(to_address: str, code: str):
+    """
+    Simulates sending an email by printing to the console. Stands in for a
+    real SMTP/transactional-email call. Used as the second, non-SMS channel
+    for the unknown-device step-up (Layer 1).
+    """
+    print(f"\n{'='*50}")
+    print(f"  SIMULATED EMAIL SENT")
+    print(f"  To:      {to_address}")
+    print(f"  Subject: SecureAuth new-device verification")
+    print(f"  Message: Your verification code is: {code}")
+    print(f"  Valid for 5 minutes.")
     print(f"{'='*50}\n")

@@ -17,18 +17,21 @@ Key fixes vs the original version:
   check — it now runs SIM binding too, then escalates to OTP either way.
 """
 
+import hashlib
 import hmac
+import secrets
 from datetime import datetime, timedelta
 from flask import request
-from models import db, User, DeviceFingerprint, AuthenticationLog, OTPRequest
+from models import db, User, DeviceFingerprint, AuthenticationLog, OTPRequest, EmailChallenge
 from ml_model import calculate_risk_score, classify_risk, extract_features, extract_transaction_features
-from otp import validate_otp, generate_otp, simulate_sms
+from otp import match_otp_step, generate_otp, simulate_sms, simulate_email, OTP_VALIDITY_SECONDS
 import bcrypt
 
 
 # ── CONSTANTS ────────────────────────────────────────────────────────────────
 MAX_FAILED_ATTEMPTS = 3
 LOCKOUT_MINUTES     = 30
+EMAIL_CODE_VALIDITY_SECONDS = 300   # unknown-device email step-up code
 
 
 # ── LAYER 0: CREDENTIAL VERIFICATION ─────────────────────────────────────────
@@ -108,8 +111,8 @@ def check_device_fingerprint(user: User, current_fp: str) -> tuple:
 
 
 def add_trusted_device(user: User, fingerprint: str, label: str = None):
-    """Call this once a step-up flow (e.g. OTP success on a new device)
-    has confirmed the user — promotes the new fingerprint to known/trusted."""
+    """Call this once a step-up flow has fully succeeded (email code AND SMS
+    OTP AND the ML risk check) - promotes the new fingerprint to trusted."""
     existing = db.session.query(DeviceFingerprint).filter_by(
         user_id=user.id, fingerprint=fingerprint).first()
     if existing:
@@ -118,7 +121,7 @@ def add_trusted_device(user: User, fingerprint: str, label: str = None):
     else:
         db.session.add(DeviceFingerprint(
             user_id=user.id, fingerprint=fingerprint,
-            label=label or 'Verified via step-up OTP'
+            label=label or 'Verified via step-up'
         ))
     db.session.commit()
 
@@ -188,26 +191,109 @@ def send_otp(user: User) -> str:
     return otp_code
 
 
+def _otp_failure(user: User, message: str) -> tuple:
+    """Record a failed OTP attempt (and lock the account at the limit)."""
+    user.failed_attempts += 1
+    if user.failed_attempts >= MAX_FAILED_ATTEMPTS:
+        user.is_locked = True
+    db.session.commit()
+    return False, message
+
+
 def verify_otp_code(user: User, submitted_otp: str) -> tuple:
     """
     Validate the OTP submitted by the user.
+
+    A code is accepted only if ALL of the following hold:
+      1. it is a 6-digit string;
+      2. there is an unused OTP request for this user issued within the last
+         OTP_VALIDITY_SECONDS (so a code cannot be used without having been
+         requested, and cannot outlive its request);
+      3. it matches the user's TOTP for the current step +/- 1; and
+      4. its time step is newer than the last step already accepted
+         (single use: a replayed or re-submitted code is rejected).
+    On success the request(s) are consumed and the step is recorded.
+
     Returns (passed: bool, message: str)
     """
     if not submitted_otp or len(submitted_otp) != 6 or not submitted_otp.isdigit():
         return False, "Invalid OTP format"
 
-    is_valid = validate_otp(user.totp_secret, submitted_otp)
+    active = (OTPRequest.query
+              .filter_by(user_id=user.id, used=False)
+              .order_by(OTPRequest.requested_at.desc())
+              .first())
+    if active is None:
+        return _otp_failure(user, "Invalid or expired OTP")
+    age = (datetime.utcnow() - active.requested_at).total_seconds()
+    if age > OTP_VALIDITY_SECONDS:
+        return _otp_failure(user, "Invalid or expired OTP")
 
-    if is_valid:
-        user.failed_attempts = 0
-        db.session.commit()
-        return True, "OTP verified"
-    else:
-        user.failed_attempts += 1
-        if user.failed_attempts >= MAX_FAILED_ATTEMPTS:
-            user.is_locked = True
-        db.session.commit()
-        return False, "Invalid or expired OTP"
+    step = match_otp_step(user.totp_secret, submitted_otp)
+    if step is None:
+        return _otp_failure(user, "Invalid or expired OTP")
+    if user.last_otp_step is not None and step <= user.last_otp_step:
+        return _otp_failure(user, "OTP already used")
+
+    # Success: consume this code and invalidate any other pending requests.
+    OTPRequest.query.filter_by(user_id=user.id, used=False).update({'used': True})
+    user.last_otp_step = step
+    user.failed_attempts = 0
+    db.session.commit()
+    return True, "OTP verified"
+
+
+# ── LAYER 1 STEP-UP: EMAIL CHALLENGE (non-SMS channel) ────────────────────────
+def _email_code_hash(user_id: int, code: str) -> str:
+    return hashlib.sha256(f"{user_id}:{code}".encode('utf-8')).hexdigest()
+
+
+def send_email_challenge(user: User) -> str:
+    """
+    Issue a 6-digit code to the user's registered email address. Any earlier
+    unused challenge is invalidated. Returns the code only so the simulated
+    email (console) and the tests can use it; never return it to the client.
+    """
+    EmailChallenge.query.filter_by(user_id=user.id, used=False).update({'used': True})
+    code = f"{secrets.randbelow(10 ** 6):06d}"
+    db.session.add(EmailChallenge(
+        user_id=user.id,
+        code_hash=_email_code_hash(user.id, code),
+        created_at=datetime.utcnow(),
+        used=False,
+    ))
+    db.session.commit()
+    simulate_email(user.email, code)
+    return code
+
+
+def verify_email_code(user: User, submitted_code: str) -> tuple:
+    """
+    Validate the email step-up code. Accepted only if it is a 6-digit string,
+    there is an unused challenge issued within EMAIL_CODE_VALIDITY_SECONDS,
+    and the hash matches. The challenge is consumed on success (single use).
+    Failures count towards the same lockout counter as OTP failures.
+    Returns (passed: bool, message: str)
+    """
+    if not submitted_code or len(submitted_code) != 6 or not submitted_code.isdigit():
+        return False, "Invalid code format"
+
+    challenge = (EmailChallenge.query
+                 .filter_by(user_id=user.id, used=False)
+                 .order_by(EmailChallenge.created_at.desc())
+                 .first())
+    if challenge is None:
+        return _otp_failure(user, "Invalid or expired code")
+    age = (datetime.utcnow() - challenge.created_at).total_seconds()
+    if age > EMAIL_CODE_VALIDITY_SECONDS:
+        return _otp_failure(user, "Invalid or expired code")
+    if not hmac.compare_digest(challenge.code_hash,
+                               _email_code_hash(user.id, submitted_code)):
+        return _otp_failure(user, "Invalid or expired code")
+
+    challenge.used = True
+    db.session.commit()
+    return True, "Email verified"
 
 
 # ── LAYER 4: ML ANOMALY DETECTION ────────────────────────────────────────────
